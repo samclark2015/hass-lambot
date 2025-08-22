@@ -4,18 +4,17 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Literal
 
-from core.homeassistant.components.mqtt.entity import CONF_ENABLED_BY_DEFAULT
-from core.homeassistant.const import CONF_ENTITY_CATEGORY, CONF_NAME
 from homeassistant.components.mqtt import (
     CONF_COMMAND_TOPIC,
     CONF_STATE_TOPIC,
     MQTT_RW_SCHEMA,
     subscription,
 )
+from homeassistant.components.mqtt.const import CONF_ENABLED_BY_DEFAULT
 from homeassistant.components.mqtt.entity import MqttEntity
 from homeassistant.components.vacuum import StateVacuumEntity, VacuumEntityFeature
 from homeassistant.components.vacuum.const import VacuumActivity
-from homeassistant.const import STATE_UNKNOWN
+from homeassistant.const import CONF_NAME, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.json import json_dumps
 from homeassistant.util.json import json_loads_object
