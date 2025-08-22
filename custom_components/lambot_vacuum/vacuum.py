@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Literal
 
-from core.homeassistant.components.mqtt import MQTT_RW_SCHEMA
 from homeassistant.components.mqtt import (
     CONF_COMMAND_TOPIC,
     CONF_STATE_TOPIC,
+    MQTT_RW_SCHEMA,
     subscription,
 )
 from homeassistant.components.mqtt.entity import MqttEntity

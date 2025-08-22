@@ -9,8 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from core.homeassistant.const import CONF_DEVICE_ID, CONF_PREFIX
-from homeassistant.const import Platform
+from homeassistant.const import CONF_DEVICE_ID, CONF_PREFIX, Platform
 from homeassistant.loader import async_get_loaded_integration
 
 from .data import LambotData

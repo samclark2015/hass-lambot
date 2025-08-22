@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import voluptuous as vol
-from core.homeassistant.const import CONF_DEVICE_ID, CONF_FRIENDLY_NAME, CONF_PREFIX
 from homeassistant import config_entries
 from homeassistant.components import mqtt
+from homeassistant.const import CONF_DEVICE_ID, CONF_FRIENDLY_NAME, CONF_PREFIX
 from slugify import slugify
 
 from .const import DOMAIN, LOGGER
