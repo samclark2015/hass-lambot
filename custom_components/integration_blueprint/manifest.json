@@ -1,12 +1,13 @@
 {
-  "domain": "integration_blueprint",
-  "name": "Integration blueprint",
+  "domain": "lambot_vacuum",
+  "name": "Lambot Vacuum Integration",
   "codeowners": [
-    "@ludeeus"
+    "@samclark2015"
   ],
   "config_flow": true,
-  "documentation": "https://github.com/ludeeus/integration_blueprint",
+  "documentation": "https://github.com/samclark2015/lambot_vacuum",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/ludeeus/integration_blueprint/issues",
-  "version": "0.1.0"
+  "issue_tracker": "https://github.com/samclark2015/lambot_vacuum/issues",
+  "version": "0.1.0",
+  "dependencies": ["mqtt"]
 }
