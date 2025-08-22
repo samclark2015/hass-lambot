@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Literal
 
 from core.homeassistant.components.mqtt.entity import CONF_ENABLED_BY_DEFAULT
-from core.homeassistant.const import CONF_ENTITY_CATEGORY
+from core.homeassistant.const import CONF_ENTITY_CATEGORY, CONF_NAME
 from homeassistant.components.mqtt import (
     CONF_COMMAND_TOPIC,
     CONF_STATE_TOPIC,
@@ -84,7 +84,6 @@ class LambotVacuum(MqttEntity, StateVacuumEntity):
     """Representation of a MQTT-controlled state vacuum."""
 
     _config_entry: LambotConfigEntry
-    _default_name = "Lambot Vacuum"
 
     def __init__(
         self,
@@ -96,6 +95,7 @@ class LambotVacuum(MqttEntity, StateVacuumEntity):
                 CONF_STATE_TOPIC: config_entry.runtime_data.app_topic,
                 CONF_COMMAND_TOPIC: config_entry.runtime_data.robot_topic,
                 CONF_ENABLED_BY_DEFAULT: True,
+                CONF_NAME: "Lambot Vacuum",
             }
         )
         MqttEntity.__init__(self, hass, config, config_entry, None)
