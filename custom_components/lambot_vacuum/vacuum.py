@@ -89,14 +89,12 @@ class LambotVacuum(MqttEntity, StateVacuumEntity):
         hass: HomeAssistant,
         config_entry: LambotConfigEntry,
     ) -> None:
-        config = MQTT_RW_SCHEMA(
-            {
-                CONF_STATE_TOPIC: config_entry.runtime_data.app_topic,
-                CONF_COMMAND_TOPIC: config_entry.runtime_data.robot_topic,
-                CONF_ENABLED_BY_DEFAULT: True,
-                CONF_NAME: "Lambot Vacuum",
-            }
-        )
+        config = {
+            CONF_STATE_TOPIC: config_entry.runtime_data.app_topic,
+            CONF_COMMAND_TOPIC: config_entry.runtime_data.robot_topic,
+            CONF_ENABLED_BY_DEFAULT: True,
+            CONF_NAME: "Lambot Vacuum",
+        }
         MqttEntity.__init__(self, hass, config, config_entry, None)
 
     @staticmethod
