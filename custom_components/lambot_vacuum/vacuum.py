@@ -31,6 +31,7 @@ type LambotCommand = Literal["RESUME", "STATUS"] | VacuumEntityFeature
 
 PAYLOADS: dict[LambotCommand, Any] = {
     VacuumEntityFeature.RETURN_HOME: {"f": 25},
+    VacuumEntityFeature.STOP: {"f": 25},
     VacuumEntityFeature.START: {"f": 26},
     VacuumEntityFeature.PAUSE: {"f": 24, "p": 1},
     "RESUME": {"f": 24, "p": 2},
