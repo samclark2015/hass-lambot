@@ -43,7 +43,7 @@ class LambotFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             title=name,
             data={
                 "uuid": uuid,
-                "ip": ip,
+                "ip": str(ip),
                 "port": port,
             },
         )

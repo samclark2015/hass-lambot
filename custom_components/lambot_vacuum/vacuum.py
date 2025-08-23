@@ -18,6 +18,7 @@ from .const import (
     LAMBOT_MQTT_USERNAME,
     LAMBOT_OP_STATUS,
     LAMBOT_STATUS_WAIT,
+    LOGGER,
 )
 
 if TYPE_CHECKING:
@@ -88,9 +89,10 @@ class LambotVacuum(StateVacuumEntity):
         self._hass = hass
         self._config_entry = config_entry
         self._read_task: asyncio.Task | None = None
+        self._heartbeat_task: asyncio.Task | None = None
         self._last_status_timestamp: datetime | None = None
         self._client = Client(
-            str(config_entry.runtime_data.address),
+            config_entry.runtime_data.address,
             config_entry.runtime_data.port,
             username=LAMBOT_MQTT_USERNAME,
             password=LAMBOT_MQTT_PASSWORD,
@@ -111,6 +113,7 @@ class LambotVacuum(StateVacuumEntity):
                 datetime.now(tz=UTC) - timedelta(seconds=LAMBOT_STATUS_WAIT)
             ):
                 await self._async_publish_command("STATUS")
+                LOGGER.info("Heartbeat: requesting status update")
             await asyncio.sleep(LAMBOT_STATUS_WAIT)
 
     async def _process_messages(self) -> None:
@@ -136,6 +139,10 @@ class LambotVacuum(StateVacuumEntity):
             self._read_task = self._config_entry.async_create_background_task(
                 self._hass, self._process_messages(), "LambotVacuumRead"
             )
+        if not self._heartbeat_task:
+            self._heartbeat_task = self._config_entry.async_create_background_task(
+                self._hass, self._heartbeat(), "LambotVacuumHeartbeat"
+            )
         await self._client.subscribe(self._state_topic)
 
     async def async_will_remove_from_hass(self) -> None:
@@ -143,6 +150,9 @@ class LambotVacuum(StateVacuumEntity):
         if self._read_task:
             self._read_task.cancel()
             self._read_task = None
+        if self._heartbeat_task:
+            self._heartbeat_task.cancel()
+            self._heartbeat_task = None
         await self._client.unsubscribe(self._state_topic)
         await self._client.__aexit__(None, None, None)
 
