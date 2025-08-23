@@ -2,38 +2,38 @@
 
 from __future__ import annotations
 
+import asyncio
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any, Literal
 
-from homeassistant.components.mqtt import (
-    CONF_COMMAND_TOPIC,
-    CONF_STATE_TOPIC,
-    MQTT_RW_SCHEMA,
-    subscription,
-)
-from homeassistant.components.mqtt.const import CONF_ENABLED_BY_DEFAULT
-from homeassistant.components.mqtt.entity import MqttEntity
+from aiomqtt import Client, Message
 from homeassistant.components.vacuum import StateVacuumEntity, VacuumEntityFeature
 from homeassistant.components.vacuum.const import VacuumActivity
-from homeassistant.const import CONF_NAME, STATE_UNKNOWN
-from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.json import json_dumps
 from homeassistant.util.json import json_loads_object
+from pytz import UTC
+
+from .const import (
+    LAMBOT_MQTT_PASSWORD,
+    LAMBOT_MQTT_USERNAME,
+    LAMBOT_OP_STATUS,
+    LAMBOT_STATUS_WAIT,
+)
 
 if TYPE_CHECKING:
-    from homeassistant.components.mqtt.models import ReceiveMessage
+    from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
-    from homeassistant.helpers.typing import VolSchemaType
 
     from .data import LambotConfigEntry
 
-LAMBOT_STATUS = 16
-type LambotCommand = VacuumEntityFeature | Literal["RESUME"]
+type LambotCommand = Literal["RESUME", "STATUS"] | VacuumEntityFeature
 
 PAYLOADS: dict[LambotCommand, Any] = {
     VacuumEntityFeature.RETURN_HOME: {"f": 25},
     VacuumEntityFeature.START: {"f": 26},
     VacuumEntityFeature.PAUSE: {"f": 24, "p": 1},
     "RESUME": {"f": 24, "p": 2},
+    "STATUS": {"f": 41},
 }
 
 STATES: dict[int, VacuumActivity] = {
@@ -79,112 +79,94 @@ async def async_setup_entry(
     )
 
 
-class LambotVacuum(MqttEntity, StateVacuumEntity):
-    """Representation of a MQTT-controlled state vacuum."""
+class LambotVacuum(StateVacuumEntity):
+    """Class representing a Lambot vacuum cleaner."""
 
-    _config_entry: LambotConfigEntry
+    def __init__(self, hass: HomeAssistant, config_entry: LambotConfigEntry) -> None:
+        """Create a new instance."""
+        super().__init__()
+        self._hass = hass
+        self._config_entry = config_entry
+        self._read_task: asyncio.Task | None = None
+        self._last_status_timestamp: datetime | None = None
+        self._client = Client(
+            str(config_entry.runtime_data.address),
+            config_entry.runtime_data.port,
+            username=LAMBOT_MQTT_USERNAME,
+            password=LAMBOT_MQTT_PASSWORD,
+        )
 
-    def __init__(
-        self,
-        hass: HomeAssistant,
-        config_entry: LambotConfigEntry,
-    ) -> None:
-        config = {
-            CONF_STATE_TOPIC: config_entry.runtime_data.app_topic,
-            CONF_COMMAND_TOPIC: config_entry.runtime_data.robot_topic,
-            CONF_ENABLED_BY_DEFAULT: True,
-            CONF_NAME: "Lambot Vacuum",
-        }
-        MqttEntity.__init__(self, hass, config, config_entry, None)
+        uuid = str(config_entry.runtime_data.uuid)
+        self._attr_unique_id = uuid
+        self._command_topic = f"device/{uuid}/robot"
+        self._state_topic = f"device/{uuid}/app"
 
-    @staticmethod
-    def config_schema() -> VolSchemaType:
-        """Return the config schema."""
-        return MQTT_RW_SCHEMA
+        for feature in PAYLOADS:
+            if isinstance(feature, VacuumEntityFeature):
+                self._attr_supported_features |= feature
 
-    @callback
-    def _state_message_received(self, msg: ReceiveMessage) -> None:
-        """Handle state MQTT message."""
+    async def _heartbeat(self) -> None:
+        while True:
+            if self._last_status_timestamp is None or self._last_status_timestamp < (
+                datetime.now(tz=UTC) - timedelta(seconds=LAMBOT_STATUS_WAIT)
+            ):
+                await self._async_publish_command("STATUS")
+            await asyncio.sleep(LAMBOT_STATUS_WAIT)
+
+    async def _process_messages(self) -> None:
+        async for message in self._client.messages:
+            await self._handle_message(message)
+
+    async def _handle_message(self, msg: Message) -> None:
+        if not isinstance(msg.payload, (bytes, bytearray, str, memoryview)):
+            return
+
         payload = json_loads_object(msg.payload)
-        if "f" in payload and payload["f"] == LAMBOT_STATUS:
+        if "f" in payload and payload["f"] == LAMBOT_OP_STATUS:
             state = payload.get("p")
             if isinstance(state, int):
-                self._attr_state = STATES.get(state, STATE_UNKNOWN)
+                self._attr_activity = STATES.get(state)
+                self._last_status_timestamp = datetime.now(tz=UTC)
                 self.async_write_ha_state()
 
-    @callback
-    def _prepare_subscribe_topics(self) -> None:
-        """(Re)Subscribe to topics."""
-        self.add_subscription(
-            CONF_STATE_TOPIC,
-            self._state_message_received,
-            {"_attr_state"},
-        )
+    async def async_added_to_hass(self) -> None:
+        """Handle when the entity is added to Home Assistant."""
+        await self._client.__aenter__()
+        if not self._read_task:
+            self._read_task = self._config_entry.async_create_background_task(
+                self._hass, self._process_messages(), "LambotVacuumRead"
+            )
+        await self._client.subscribe(self._state_topic)
 
-    async def _subscribe_topics(self) -> None:
-        """(Re)Subscribe to topics."""
-        subscription.async_subscribe_topics_internal(self.hass, self._sub_state)
+    async def async_will_remove_from_hass(self) -> None:
+        """Handle when the entity is removed from Home Assistant."""
+        if self._read_task:
+            self._read_task.cancel()
+            self._read_task = None
+        await self._client.unsubscribe(self._state_topic)
+        await self._client.__aexit__(None, None, None)
 
     async def _async_publish_command(self, feature: LambotCommand) -> None:
-        """Publish a command."""
-        await self.async_publish_with_config(
-            self._config_entry.runtime_data.robot_topic, json_dumps(PAYLOADS[feature])
-        )
-        self.async_write_ha_state()
+        """Publish a command to the MQTT broker."""
+        topic = self._command_topic
+        payload = json_dumps(PAYLOADS[feature])
+        await self._client.publish(topic, payload)
 
     async def async_start(self) -> None:
         """Start the vacuum."""
-        await self._async_publish_command(VacuumEntityFeature.START)
+        if self.activity == VacuumActivity.PAUSED:
+            await self._async_publish_command("RESUME")
+        else:
+            await self._async_publish_command(VacuumEntityFeature.START)
 
     async def async_pause(self) -> None:
         """Pause the vacuum."""
         await self._async_publish_command(VacuumEntityFeature.PAUSE)
 
-    async def async_stop(self, **kwargs: Any) -> None:
+    async def async_stop(self, **_kwargs: Any) -> None:
         """Stop the vacuum."""
         await self._async_publish_command(VacuumEntityFeature.STOP)
 
-    async def async_return_to_base(self, **kwargs: Any) -> None:
+    async def async_return_to_base(self, **_kwargs: Any) -> None:
         """Tell the vacuum to return to its dock."""
         await self._async_publish_command(VacuumEntityFeature.RETURN_HOME)
-
-    # async def async_clean_spot(self, **kwargs: Any) -> None:
-    #     """Perform a spot clean-up."""
-    #     await self._async_publish_command(VacuumEntityFeature.CLEAN_SPOT)
-
-    # async def async_locate(self, **kwargs: Any) -> None:
-    #     """Locate the vacuum (usually by playing a song)."""
-    #     await self._async_publish_command(VacuumEntityFeature.LOCATE)
-
-    # async def async_set_fan_speed(self, fan_speed: str, **kwargs: Any) -> None:
-    #     """Set fan speed."""
-    #     if (
-    #         self._set_fan_speed_topic is None
-    #         or (self.supported_features & VacuumEntityFeature.FAN_SPEED == 0)
-    #         or (fan_speed not in self.fan_speed_list)
-    #     ):
-    #         return
-    #     await self.async_publish_with_config(self._set_fan_speed_topic, fan_speed)
-
-    # async def async_send_command(
-    #     self,
-    #     command: str,
-    #     params: dict[str, Any] | list[Any] | None = None,
-    #     **kwargs: Any,
-    # ) -> None:
-    #     """Send a command to a vacuum cleaner."""
-    #     if (
-    #         self._send_command_topic is None
-    #         or self.supported_features & VacuumEntityFeature.SEND_COMMAND == 0
-    #     ):
-    #         return
-    #     if isinstance(params, dict):
-    #         message: dict[str, Any] = {"command": command}
-    #         message.update(params)
-    #         payload = json_dumps(message)
-    #     else:
-    #         payload = command
-    #     await self.async_publish_with_config(self._send_command_topic, payload)
-    #     else:
-    #         payload = command
-    #     await self.async_publish_with_config(self._send_command_topic, payload)

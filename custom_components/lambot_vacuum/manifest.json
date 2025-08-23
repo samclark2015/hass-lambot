@@ -9,5 +9,13 @@
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/samclark2015/lambot_vacuum/issues",
   "version": "0.1.0",
-  "dependencies": ["mqtt"]
+  "requirements": [
+    "aiomqtt==2.4.0"
+  ],
+  "dependencies": [
+    "zeroconf"
+  ],
+  "zeroconf": [
+    "_lambot._tcp.local."
+  ]
 }

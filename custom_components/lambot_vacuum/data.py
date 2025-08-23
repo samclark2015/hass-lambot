@@ -6,6 +6,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from ipaddress import IPv4Address, IPv6Address
+    from uuid import UUID
+
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.loader import Integration
 
@@ -18,5 +21,6 @@ class LambotData:
     """Data for the Blueprint integration."""
 
     integration: Integration
-    robot_topic: str
-    app_topic: str
+    uuid: UUID
+    address: IPv4Address | IPv6Address
+    port: int

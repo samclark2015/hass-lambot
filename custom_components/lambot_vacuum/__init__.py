@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from homeassistant.const import CONF_DEVICE_ID, CONF_PREFIX, Platform
+from homeassistant.const import Platform
 from homeassistant.loader import async_get_loaded_integration
 
 from .data import LambotData
@@ -27,16 +27,12 @@ async def async_setup_entry(
     hass: HomeAssistant,
     entry: LambotConfigEntry,
 ) -> bool:
-    device_id = entry.data.get(CONF_DEVICE_ID)
-    topic_prefix = entry.data.get(CONF_PREFIX, "")
-    if topic_prefix and topic_prefix[-1] != "/":
-        topic_prefix = topic_prefix + "/"
-
     """Set up this integration using UI."""
     entry.runtime_data = LambotData(
         integration=async_get_loaded_integration(hass, entry.domain),
-        app_topic=topic_prefix + "device/" + device_id + "/app",
-        robot_topic=topic_prefix + "device/" + device_id + "/robot",
+        uuid=entry.data["uuid"],
+        address=entry.data["ip"],
+        port=entry.data["port"],
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

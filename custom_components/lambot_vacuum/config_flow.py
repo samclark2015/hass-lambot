@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
-import voluptuous as vol
-from homeassistant import config_entries
-from homeassistant.components import mqtt
-from homeassistant.const import CONF_DEVICE_ID, CONF_FRIENDLY_NAME, CONF_PREFIX
-from slugify import slugify
+from typing import TYPE_CHECKING
+from uuid import UUID
 
-from .const import DOMAIN, LOGGER
+from homeassistant import config_entries
+
+from .const import DOMAIN, LAMBOT_MDNS_PARTS, LOGGER
+
+if TYPE_CHECKING:
+    from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
+
+ZEROCONF_SERVICE = "._lambot._tcp.local."
 
 
 class LambotFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
@@ -16,49 +20,30 @@ class LambotFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
-    async def async_step_user(
-        self,
-        user_input: dict | None = None,
+    async def async_step_zeroconf(
+        self, discovery_info: ZeroconfServiceInfo
     ) -> config_entries.ConfigFlowResult:
-        """Handle a flow initialized by the user."""
-        # Make sure MQTT integration is enabled and the client is available
-        if not await mqtt.async_wait_for_mqtt_client(self.hass):
-            LOGGER.error("MQTT integration is not available")
-            return self.async_abort(reason="MQTT integration is not available")
+        """Handle Zeroconf discovery."""
+        name = discovery_info.name.removesuffix(ZEROCONF_SERVICE)
+        parts = name.split("_")
 
-        _errors = {}
-        if user_input is not None:
-            await self.async_set_unique_id(
-                unique_id=slugify(user_input[CONF_DEVICE_ID])
-            )
-            self._abort_if_unique_id_configured()
-            return self.async_create_entry(
-                title=user_input.get(
-                    CONF_FRIENDLY_NAME, f"Lambot {user_input[CONF_DEVICE_ID]}"
-                ),
-                data=user_input,
+        if len(parts) != LAMBOT_MDNS_PARTS or (parts[0] != "LB" and parts[1] != "VA"):
+            LOGGER.error("Unexpected Zeroconf discovery name: %s", name)
+            return self.async_abort(
+                reason=f"Unexpected Zeroconf discovery name: {name}"
             )
 
-        return self.async_show_form(
-            step_id="user",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(
-                        CONF_DEVICE_ID,
-                        default=(user_input or {}).get(CONF_DEVICE_ID, vol.UNDEFINED),
-                        description="Lambot Device ID",
-                    ): str,
-                    vol.Optional(
-                        CONF_FRIENDLY_NAME,
-                        default=(user_input or {}).get(CONF_FRIENDLY_NAME, None),
-                        description="Nickname for the device",
-                    ): str,
-                    vol.Optional(
-                        CONF_PREFIX,
-                        default=(user_input or {}).get(CONF_PREFIX, vol.UNDEFINED),
-                        description="MQTT topic prefix",
-                    ): str,
-                },
-            ),
-            errors=_errors,
+        uuid_str = parts[-1]
+
+        uuid = UUID(uuid_str)
+        ip = discovery_info.ip_address
+        port = discovery_info.port
+
+        return self.async_create_entry(
+            title=name,
+            data={
+                "uuid": uuid,
+                "ip": ip,
+                "port": port,
+            },
         )
