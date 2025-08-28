@@ -36,14 +36,17 @@ class LambotFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         uuid_str = parts[-1]
 
         uuid = UUID(uuid_str)
-        ip = discovery_info.ip_address
+        hostname = discovery_info.hostname
         port = discovery_info.port
+
+        await self.async_set_unique_id(str(uuid))
+        self._abort_if_unique_id_configured()
 
         return self.async_create_entry(
             title=name,
             data={
                 "uuid": uuid,
-                "ip": str(ip),
+                "ip": hostname,
                 "port": port,
             },
         )
