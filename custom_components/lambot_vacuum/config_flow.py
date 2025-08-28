@@ -36,12 +36,12 @@ class LambotFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         uuid_str = parts[-1]
 
         uuid = UUID(uuid_str)
-        hostname = discovery_info.hostname
+        host = discovery_info.host
         port = discovery_info.port
 
         config_data = {
             "uuid": uuid,
-            "ip": hostname,
+            "ip": host,
             "port": port,
         }
 
