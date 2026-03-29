@@ -10,7 +10,7 @@
   "issue_tracker": "https://github.com/samclark2015/lambot_vacuum/issues",
   "version": "0.1.0",
   "requirements": [
-    "aiomqtt==2.4.0"
+    "aiomqtt>=2.4.0"
   ],
   "dependencies": [
     "zeroconf"
